@@ -2,6 +2,21 @@
 
 class TemplateManager
 {
+    /** @const */
+    private const SUMMARY_HTML = '[quote:summary_html]';
+    /** @const */
+    private const SUMMARY = '[quote:summary]';
+    /** @const */
+    private const DESTINATION_NAME = '[quote:destination_name]';
+    /** @const */
+    private const DESTINATION_LINK = '[quote:destination_link]';
+    /** @const */
+    private const FIRST_NAME = '[user:first_name]';
+    /**
+     * @param Template $tpl
+     * @param array $data
+     * @return Template
+     */
     public function getTemplateComputed(Template $tpl, array $data)
     {
         if (!$tpl) {
@@ -15,59 +30,54 @@ class TemplateManager
         return $replaced;
     }
 
+    /**
+     * @param String $text
+     * @param array $data
+     * @return string
+     */
     private function computeText($text, array $data)
     {
-        $APPLICATION_CONTEXT = ApplicationContext::getInstance();
+        $quote = null;
+        if (isset($data['quote']) and $data['quote'] instanceof Quote) {
+            $quote = $data['quote'];
+        }
 
-        $quote = (isset($data['quote']) and $data['quote'] instanceof Quote) ? $data['quote'] : null;
-
+        /*
+         * remplacer les placeholders [quote:*]
+         */
         if ($quote)
         {
             $_quoteFromRepository = QuoteRepository::getInstance()->getById($quote->id);
             $usefulObject = SiteRepository::getInstance()->getById($quote->siteId);
             $destinationOfQuote = DestinationRepository::getInstance()->getById($quote->destinationId);
 
-            if(strpos($text, '[quote:destination_link]') !== false){
-                $destination = DestinationRepository::getInstance()->getById($quote->destinationId);
-            }
-
-            $containsSummaryHtml = strpos($text, '[quote:summary_html]');
-            $containsSummary     = strpos($text, '[quote:summary]');
-
-            if ($containsSummaryHtml !== false || $containsSummary !== false) {
-                if ($containsSummaryHtml !== false) {
-                    $text = str_replace(
-                        '[quote:summary_html]',
-                        Quote::renderHtml($_quoteFromRepository),
-                        $text
-                    );
-                }
-                if ($containsSummary !== false) {
-                    $text = str_replace(
-                        '[quote:summary]',
-                        Quote::renderText($_quoteFromRepository),
-                        $text
-                    );
-                }
-            }
-
-            (strpos($text, '[quote:destination_name]') !== false) and $text = str_replace('[quote:destination_name]',$destinationOfQuote->countryName,$text);
+            $placeholders = [self::SUMMARY_HTML, self::SUMMARY, self::DESTINATION_NAME];
+            $informations = [Quote::renderHtml($_quoteFromRepository), Quote::renderText($_quoteFromRepository), $destinationOfQuote->countryName];
+            $text = str_replace($placeholders, $informations, $text);
         }
 
-        if (isset($destination))
-            $text = str_replace('[quote:destination_link]', $usefulObject->url . '/' . $destination->countryName . '/quote/' . $_quoteFromRepository->id, $text);
-        else
-            $text = str_replace('[quote:destination_link]', '', $text);
+        $destination = '';
+        if (isset($destinationOfQuote)) {
+            $destination = $usefulObject->url . '/' . $destinationOfQuote->countryName . '/quote/' . $_quoteFromRepository->id;
+        }
+        $text = str_replace(self::DESTINATION_LINK, $destination, $text);
 
         /*
          * USER
-         * [user:*]
+         * remplacer le placeholder [user:first_name]
          */
-        $_user  = (isset($data['user'])  and ($data['user']  instanceof User))  ? $data['user']  : $APPLICATION_CONTEXT->getCurrentUser();
-        if($_user) {
-            (strpos($text, '[user:first_name]') !== false) and $text = str_replace('[user:first_name]'       , ucfirst(mb_strtolower($_user->firstname)), $text);
+        $_user = null;
+        if (isset($data['user']) and ($data['user'] instanceof User)) {
+            $_user = $data['user'];
+        }
+        else {
+            $_user = ApplicationContext::getInstance()->getCurrentUser();
+        }
+        if ($_user) {
+            $text = str_replace(self::FIRST_NAME, ucfirst(mb_strtolower($_user->firstname)), $text);
         }
 
         return $text;
     }
+
 }
